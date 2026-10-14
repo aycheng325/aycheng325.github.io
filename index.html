@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大学生记账系统｜钱包变动带账单记录版</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:"Microsoft YaHei",sans-serif}
+body{background-color:#f4f7fa;color:#333;padding:16px;line-height:1.6}
+.container{max-width:1200px;margin:0 auto;gap:20px;display:grid;grid-template-columns:1fr;}
+@media(min-width:768px){
+  .container{grid-template-columns:380px 1fr;}
+}
+.card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 2px 12px rgba(0,0,0,0.08)}
+.card-title{font-size:18px;font-weight:600;margin-bottom:16px;color:#2c3e50;border-left:4px solid #409eff;padding-left:10px}
+
+/* 表单 */
+.form-item{margin-bottom:14px}
+label{display:block;margin-bottom:6px;font-size:14px;color:#555}
+input,textarea{width:100%;padding:10px 12px;border:1px solid #dde1e7;border-radius:10px;font-size:15px;outline:none;transition:0.2s}
+input:focus,textarea:focus{border-color:#409eff;box-shadow:0 0 0 3px rgba(64,158,255,0.15)}
+textarea{resize:none;height:70px}
+.btn{width:100%;padding:11px;border:none;border-radius:10px;font-size:16px;cursor:pointer;transition:0.2s;margin-top:8px;}
+.btn-primary{background:#409eff;color:#fff}
+.btn-primary:hover{background:#337ecc}
+.btn-success{background:#009b5b;color:#fff}
+.btn-success:hover{background:#00804c}
+.btn-warning{background:#f5a623;color:#fff}
+.btn-warning:hover{background:#e0941c}
+.btn-danger{background:#ff4d4f;color:#fff}
+.btn-danger:hover{background:#e03e40}
+
+/* 类型切换 收入/支出 */
+.type-tab{display:flex;gap:10px;margin-bottom:16px}
+.type-tab button{flex:1;padding:10px;border-radius:10px;border:1px solid #dde1e7;background:#fff;font-size:15px;cursor:pointer;transition:0.2s}
+.type-tab button.active-income{background:#009b5b;color:#fff;border-color:#009b5b}
+.type-tab button.active-expense{background:#e64340;color:#fff;border-color:#e64340}
+
+/* 分类图标选择区域 */
+.icon-category-wrap{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:8px}
+.icon-item{padding:10px 6px;border:1px solid #dde1e7;border-radius:10px;text-align:center;cursor:pointer;transition:0.2s;user-select:none;}
+.icon-item.active{border-color:#409eff;background:#f0f7ff}
+.icon-item .icon{font-size:22px;margin-bottom:4px}
+.icon-item .text{font-size:12px;color:#555}
+
+/* 数据概览 */
+.overview{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.overview-item{padding:14px;border-radius:12px;text-align:center}
+.income{background:#ecfdf3;color:#009b5b}
+.expense{background:#fff1f0;color:#e64340}
+.balance{background:#f0f7ff;color:#2b7cd3}
+.wallet{background:#fffbeb;color:#d48806}
+.overview-num{font-size:22px;font-weight:bold;margin-top:4px}
+
+/* 当月收支卡片 */
+.month-overview{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px;margin-bottom:16px}
+.wallet-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.wallet-full{grid-column: 1 / -1;margin-top:10px;}
+
+/* 余额状态卡片（基于总余额） */
+.total-status{margin-top:16px;padding:16px;border-radius:12px;text-align:center}
+.status-level{font-size:20px;font-weight:bold;margin-top:6px}
+.status-danger{background:#ffecec;color:#d92121;}
+.status-warning{background:#fff7e6;color:#fa8c16;}
+.status-normal{background:#e6f7ff;color:#1890ff;}
+.status-rich{background:#f0fff4;color:#009b5b;}
+
+/* 图表区域 */
+.chart-wrap{display:grid;grid-template-columns:1fr;gap:16px;margin-bottom:20px}
+@media(min-width:768px){
+  .chart-wrap{grid-template-columns:1fr 1fr}
+}
+.chart-box{height:320px}
+
+/* 记录列表 */
+.record-item{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #eee}
+.record-left{flex:1}
+.record-name{font-weight:500}
+.record-info{font-size:13px;color:#888;margin-top:3px}
+.record-right{display:flex;align-items:center;gap:10px}
+.money-in{color:#009b5b;font-weight:bold}
+.money-out{color:#e64340;font-weight:bold}
+.del-btn{border:none;background:#ff4d4f;color:#fff;padding:4px 9px;border-radius:6px;cursor:pointer;font-size:13px}
+
+/* 图表tab */
+.tab{display:flex;gap:8px;margin-bottom:16px}
+.tab button{padding:8px 14px;border-radius:8px;border:1px solid #dde1e7;background:#fff;cursor:pointer}
+.tab button.active{background:#409eff;color:#fff;border-color:#409eff}
+</style>
+</head>
+<body>
+<div class="container">
+  <!-- 录入表单 -->
+  <div class="card">
+    <h3 class="card-title">新增收支记录</h3>
+    <div class="form-item">
+      <label>收支类型</label>
+      <div class="type-tab">
+        <button id="btnIncome" onclick="setType('income')">💰 收入</button>
+        <button id="btnExpense" onclick="setType('expense')">💸 支出</button>
+      </div>
+    </div>
+
+    <div class="form-item">
+      <label>选择分类（点击图标）</label>
+      <!-- 支出分类图标组 -->
+      <div id="expenseCategory" class="icon-category-wrap">
+        <div class="icon-item" data-cat="餐饮" onclick="selectCat(this,'餐饮')">
+          <div class="icon">🍚</div><div class="text">餐饮</div>
+        </div>
+        <div class="icon-item" data-cat="外卖" onclick="selectCat(this,'外卖')">
+          <div class="icon">🥡</div><div class="text">外卖</div>
+        </div>
+        <div class="icon-item" data-cat="通勤" onclick="selectCat(this,'通勤')">
+          <div class="icon">🚌</div><div class="text">通勤</div>
+        </div>
+        <div class="icon-item" data-cat="学习" onclick="selectCat(this,'学习')">
+          <div class="icon">📚</div><div class="text">学习</div>
+        </div>
+        <div class="icon-item" data-cat="网购" onclick="selectCat(this,'网购')">
+          <div class="icon">🛒</div><div class="text">网购</div>
+        </div>
+        <div class="icon-item" data-cat="娱乐" onclick="selectCat(this,'娱乐')">
+          <div class="icon">🎮</div><div class="text">娱乐</div>
+        </div>
+        <div class="icon-item" data-cat="日用品" onclick="selectCat(this,'日用品')">
+          <div class="icon">🧴</div><div class="text">日用品</div>
+        </div>
+        <div class="icon-item" data-cat="医疗" onclick="selectCat(this,'医疗')">
+          <div class="icon">💊</div><div class="text">医疗</div>
+        </div>
+      </div>
+      <!-- 收入分类图标组 -->
+      <div id="incomeCategory" class="icon-category-wrap">
+        <div class="icon-item" data-cat="生活费" onclick="selectCat(this,'生活费')">
+          <div class="icon">🧧</div><div class="text">生活费</div>
+        </div>
+        <div class="icon-item" data-cat="兼职" onclick="selectCat(this,'兼职')">
+          <div class="icon">💼</div><div class="text">兼职</div>
+        </div>
+        <div class="icon-item" data-cat="奖学金" onclick="selectCat(this,'奖学金')">
+          <div class="icon">🏆</div><div class="text">奖学金</div>
+        </div>
+        <div class="icon-item" data-cat="红包" onclick="selectCat(this,'红包')">
+          <div class="icon">🧨</div><div class="text">红包</div>
+        </div>
+        <div class="icon-item" data-cat="补助" onclick="selectCat(this,'补助')">
+          <div class="icon">📩</div><div class="text">补助</div>
+        </div>
+        <div class="icon-item" data-cat="其他收入" onclick="selectCat(this,'其他收入')">
+          <div class="icon">✨</div><div class="text">其他</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-item">
+      <label>金额</label>
+      <input type="number" id="amount" placeholder="输入金额" step="0.01" min="0">
+    </div>
+    <div class="form-item">
+      <label>日期</label>
+      <input type="date" id="date">
+    </div>
+    <div class="form-item">
+      <label>备注</label>
+      <textarea id="remark" placeholder="简单备注，例如：食堂晚餐"></textarea>
+    </div>
+    <button class="btn btn-primary" onclick="addRecord()">保存记录</button>
+  </div>
+
+  <!-- 右侧统计与钱包 -->
+  <div>
+    <div class="card">
+      <h3 class="card-title">📊 全部账单 · 总收支</h3>
+      <div class="overview">
+        <div class="overview-item income">
+          <div>总收入</div>
+          <div class="overview-num" id="totalIncome">0.00</div>
+        </div>
+        <div class="overview-item expense">
+          <div>总支出</div>
+          <div class="overview-num" id="totalExpense">0.00</div>
+        </div>
+        <div class="overview-item balance">
+          <div>总余额</div>
+          <div class="overview-num" id="totalBalance">0.00</div>
+        </div>
+      </div>
+
+      <!-- 存钱钱包区域 -->
+      <h3 class="card-title" style="margin-top:16px">💰 存钱钱包</h3>
+      <div class="overview">
+        <div class="overview-item wallet" style="grid-column: 1 / -1;">
+          <div>钱包余额</div>
+          <div class="overview-num" id="walletBalance">0.00</div>
+        </div>
+      </div>
+      <div class="wallet-row">
+        <input type="number" id="walletAmount" placeholder="划转金额" step="0.01" min="0">
+      </div>
+      <div class="wallet-row wallet-full">
+        <input type="text" id="walletRemark" placeholder="钱包备注，例：存着买耳机">
+      </div>
+      <div class="wallet-row">
+        <button class="btn btn-success" onclick="saveToWallet()">存入钱包</button>
+        <button class="btn btn-warning" onclick="takeFromWallet()">取出钱包</button>
+      </div>
+
+      <h3 class="card-title" style="margin-top:20px">🗓️ 当月收支</h3>
+      <div class="month-overview">
+        <div class="overview-item income">
+          <div>当月收入</div>
+          <div class="overview-num" id="monthIncome">0.00</div>
+        </div>
+        <div class="overview-item expense">
+          <div>当月支出</div>
+          <div class="overview-num" id="monthExpense">0.00</div>
+        </div>
+        <div class="overview-item balance">
+          <div>当月结余</div>
+          <div class="overview-num" id="monthBalance">0.00</div>
+        </div>
+      </div>
+
+      <!-- 总余额状态卡片（基于总余额判断） -->
+      <div id="totalStatusBox" class="total-status">
+        <div>资金状态（依据总余额）</div>
+        <div class="status-level" id="statusText">--</div>
+      </div>
+      <div style="margin-top:16px;">
+        <button class="btn btn-success" onclick="exportCSV()">📥 导出账单CSV</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <h3 class="card-title">统计图表</h3>
+      <div class="tab">
+        <button class="active" onclick="switchChart('day',this)">日统计</button>
+        <button onclick="switchChart('month',this)">月统计</button>
+        <button onclick="switchChart('year',this)">年统计</button>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-box"><canvas id="pieChart"></canvas></div>
+        <div class="chart-box"><canvas id="barChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <h3 class="card-title">收支记录列表</h3>
+      <div id="recordList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let records = JSON.parse(localStorage.getItem('studentAccountData')) || [];
+let walletMoney = parseFloat(localStorage.getItem('walletMoney')) || 0;
+let currentChartType = 'day';
+let pieChart, barChart;
+let recordType = 'income';
+let selectedCategory = '';
+
+// 初始化日期为今天
+document.getElementById('date').valueAsDate = new Date();
+
+// 切换收入/支出类型，切换分类图标面板
+function setType(type){
+  recordType = type;
+  const btnIncome = document.getElementById('btnIncome');
+  const btnExpense = document.getElementById('btnExpense');
+  const expenseWrap = document.getElementById('expenseCategory');
+  const incomeWrap = document.getElementById('incomeCategory');
+  // 重置选中分类
+  selectedCategory = '';
+  document.querySelectorAll('.icon-item').forEach(el=>el.classList.remove('active'));
+  if(type === 'income'){
+    btnIncome.className = "active-income";
+    btnExpense.className = "";
+    incomeWrap.style.display = 'grid';
+    expenseWrap.style.display = 'none';
+  }else{
+    btnExpense.className = "active-expense";
+    btnIncome.className = "";
+    expenseWrap.style.display = 'grid';
+    incomeWrap.style.display = 'none';
+  }
+}
+setType('income');
+
+// 点击选中分类图标
+function selectCat(el, catName){
+  el.parentElement.querySelectorAll('.icon-item').forEach(item=>item.classList.remove('active'));
+  el.classList.add('active');
+  selectedCategory = catName;
+}
+
+// 添加普通收支记录
+function addRecord(){
+  const amount = parseFloat(document.getElementById('amount').value);
+  const date = document.getElementById('date').value;
+  const remark = document.getElementById('remark').value.trim();
+  if(!amount || amount <=0 || !date || !selectedCategory){
+    alert('请选择分类并填写金额！');return;
+  }
+  records.push({
+    id:Date.now(),
+    type:recordType,
+    category:selectedCategory,
+    amount,
+    date,
+    remark
+  });
+  saveData();
+  renderAll();
+  document.getElementById('amount').value='';
+  document.getElementById('remark').value='';
+}
+
+// 保存本地
+function saveData(){
+  localStorage.setItem('studentAccountData',JSON.stringify(records));
+  localStorage.setItem('walletMoney',walletMoney.toString());
+}
+
+// 删除记录
+function delRecord(id){
+  records = records.filter(r=>r.id!==id);
+  saveData();renderAll();
+}
+
+// ===== 钱包操作：存入钱包（新增支出账单：钱包转出） =====
+function saveToWallet(){
+  const val = parseFloat(document.getElementById('walletAmount').value);
+  const wRemark = document.getElementById('walletRemark').value.trim();
+  if(isNaN(val) || val <=0){
+    alert("请输入大于0的金额");
+    return;
+  }
+  const totalBal = calcRawTotalBalance();
+  if(val > totalBal){
+    alert("总余额不足，无法存入！");
+    return;
+  }
+  const today = new Date().toISOString().slice(0,10);
+  // 添加支出记录，分类钱包转出
+  records.push({
+    id:Date.now(),
+    type:"expense",
+    category:"钱包转出",
+    amount:val,
+    date:today,
+    remark:wRemark || "资金存入存钱钱包"
+  });
+  walletMoney += val;
+  saveData();
+  renderAll();
+  document.getElementById('walletAmount').value = '';
+  document.getElementById('walletRemark').value = '';
+}
+
+// ===== 钱包操作：取出钱包（新增收入账单：钱包转入） =====
+function takeFromWallet(){
+  const val = parseFloat(document.getElementById('walletAmount').value);
+  const wRemark = document.getElementById('walletRemark').value.trim();
+  if(isNaN(val) || val <=0){
+    alert("请输入大于0的金额");
+    return;
+  }
+  if(val > walletMoney){
+    alert("钱包余额不足！");
+    return;
+  }
+  const today = new Date().toISOString().slice(0,10);
+  // 添加收入记录，分类钱包转入
+  records.push({
+    id:Date.now(),
+    type:"income",
+    category:"钱包转入",
+    amount:val,
+    date:today,
+    remark:wRemark || "资金从钱包取出"
+  });
+  walletMoney -= val;
+  saveData();
+  renderAll();
+  document.getElementById('walletAmount').value = '';
+  document.getElementById('walletRemark').value = '';
+}
+
+// 纯计算总余额（总收入-总支出）
+function calcRawTotalBalance(){
+  let totalIncome = 0, totalExpense =0;
+  records.forEach(r=>{
+    if(r.type==='income') totalIncome += r.amount;
+    else totalExpense += r.amount;
+  })
+  return totalIncome - totalExpense;
+}
+
+// 导出CSV账单
+function exportCSV(){
+  if(records.length ===0){
+    alert("暂无账单记录，无法导出！");
+    return;
+  }
+  let csvContent = "\uFEFF日期,收支类型,分类,金额,备注\n";
+  records.forEach(item=>{
+    const typeName = item.type === 'income' ? "收入" : "支出";
+    let remark = item.remark.replace(/"/g, '""');
+    csvContent += `${item.date},${typeName},${item.category},${item.amount.toFixed(2)},"${remark}"\n`;
+  })
+  const blob = new Blob([csvContent],{type:"text/csv;charset=utf-8;"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const now = new Date();
+  const fileName = `大学生记账账单_${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}.csv`;
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// 刷新全部视图
+function renderAll(){
+  calcTotalOverview();
+  calcMonthOverview();
+  renderRecordList();
+  drawChart();
+  // 更新钱包显示
+  document.getElementById('walletBalance').innerText = walletMoney.toFixed(2);
+}
+
+// ====== 全部账单总收支计算 ======
+function calcTotalOverview(){
+  let totalIncome = 0, totalExpense =0;
+  records.forEach(r=>{
+    if(r.type==='income') totalIncome += r.amount;
+    else totalExpense += r.amount;
+  })
+  const totalBal = totalIncome - totalExpense;
+  document.getElementById('totalIncome').innerText = totalIncome.toFixed(2);
+  document.getElementById('totalExpense').innerText = totalExpense.toFixed(2);
+  document.getElementById('totalBalance').innerText = totalBal.toFixed(2);
+
+  // ✅ 状态卡片基于总余额判断
+  const statusBox = document.getElementById('totalStatusBox');
+  const statusText = document.getElementById('statusText');
+  statusBox.className = "total-status";
+  let statusName = "";
+  if(totalBal < 100){
+    statusName = "极限生存";
+    statusBox.classList.add("status-danger");
+  }else if(totalBal >=100 && totalBal <500){
+    statusName = "紧张度日";
+    statusBox.classList.add("status-warning");
+  }else if(totalBal >=500 && totalBal <=1000){
+    statusName = "宽裕生活";
+    statusBox.classList.add("status-normal");
+  }else{
+    statusName = "结余充足";
+    statusBox.classList.add("status-rich");
+  }
+  statusText.innerText = `总余额 ${totalBal.toFixed(2)}元｜${statusName}`;
+}
+
+// ====== 当月收支计算 ======
+function calcMonthOverview(){
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth()+1).padStart(2,'0');
+  const targetMonth = `${y}-${m}`;
+
+  let monthIncome = 0, monthExpense =0;
+  records.filter(r=>r.date.startsWith(targetMonth)).forEach(r=>{
+    if(r.type==='income') monthIncome += r.amount;
+    else monthExpense += r.amount;
+  })
+  const monthBal = monthIncome - monthExpense;
+
+  document.getElementById('monthIncome').innerText = monthIncome.toFixed(2);
+  document.getElementById('monthExpense').innerText = monthExpense.toFixed(2);
+  document.getElementById('monthBalance').innerText = monthBal.toFixed(2);
+}
+
+// 渲染列表
+function renderRecordList(){
+  const wrap = document.getElementById('recordList');
+  wrap.innerHTML='';
+  records.slice().sort((a,b)=>b.date.localeCompare(a.date)).forEach(r=>{
+    const div = document.createElement('div');
+    div.className="record-item";
+    div.innerHTML=`
+      <div class="record-left">
+        <div class="record-name">${r.category}</div>
+        <div class="record-info">${r.date}｜${r.remark||'无备注'}</div>
+      </div>
+      <div class="record-right">
+        <span class="${r.type==='income'?'money-in':'money-out'}">${r.type==='income'?'+':'-'}${r.amount.toFixed(2)}</span>
+        <button class="del-btn" onclick="delRecord(${r.id})">删除</button>
+      </div>`;
+    wrap.appendChild(div);
+  })
+}
+
+// 切换日/月/年统计
+function switchChart(type,dom){
+  currentChartType = type;
+  document.querySelectorAll('.tab button').forEach(b=>b.classList.remove('active'));
+  dom.classList.add('active');
+  drawChart();
+}
+
+// 绘图
+function drawChart(){
+  if(pieChart) pieChart.destroy();
+  if(barChart) barChart.destroy();
+  const now = new Date();
+  let filterRecords;
+  if(currentChartType==='day'){
+    const today = now.toISOString().slice(0,10);
+    filterRecords = records.filter(r=>r.date === today);
+  }else if(currentChartType==='month'){
+    const y = now.getFullYear();
+    const m = String(now.getMonth()+1).padStart(2,'0');
+    const targetMonth = `${y}-${m}`;
+    filterRecords = records.filter(r=>r.date.startsWith(targetMonth));
+  }else{
+    const y = now.getFullYear();
+    filterRecords = records.filter(r=>r.date.startsWith(y+''));
+  }
+
+  // 支出分类饼图
+  const catMap = {};
+  filterRecords.filter(r=>r.type==='expense').forEach(r=>{
+    if(!catMap[r.category]) catMap[r.category]=0;
+    catMap[r.category] += r.amount;
+  })
+  const pieLabels = Object.keys(catMap);
+  const pieData = Object.values(catMap);
+
+  const pieCtx = document.getElementById('pieChart').getContext('2d');
+  pieChart = new Chart(pieCtx,{
+    type:'pie',
+    data:{labels:pieLabels,datasets:[{data:pieData,backgroundColor:['#409eff','#67c23a','#e6a23c','#f56c6c','#9c88ff','#36cfc9','#ff7d00','#722ed1']}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{title:{display:true,text:`${currentChartType==='day'?'今日':currentChartType==='month'?'本月':'本年'}支出分类饼图`}}}
+  })
+
+  // 收支对比柱状图
+  let incSum = filterRecords.filter(r=>r.type==='income').reduce((s,i)=>s+i.amount,0);
+  let expSum = filterRecords.filter(r=>r.type==='expense').reduce((s,i)=>s+i.amount,0);
+  const barCtx = document.getElementById('barChart').getContext('2d');
+  barChart = new Chart(barCtx,{
+    type:'bar',
+    data:{labels:['收入','支出'],datasets:[{data:[incSum,expSum],backgroundColor:['#009b5b','#e64340']}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{title:{display:true,text:`${currentChartType==='day'?'今日':currentChartType==='month'?'本月':'本年'}收支对比`}},scales:{y:{beginAtZero:true}}}
+  })
+}
+
+renderAll();
+</script>
+</body>
+</html>
